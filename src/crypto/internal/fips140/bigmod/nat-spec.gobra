@@ -39,7 +39,7 @@ ghost
 requires acc(n.Inv(), _)
 decreases
 // The number of values representable by n's limbs.
-pure func (n *Nat) ValCount() (res uint) {
+pure func (n *Nat) ValCount() (res integer) {
 	return unfolding acc(n.Inv(), _) in exp(2, _W * n.AnnouncedLen())
 }
 
@@ -48,7 +48,7 @@ opaque
 requires acc(n.Inv(), _)
 ensures  0 <= res && res < n.ValCount()
 decreases
-pure func (n *Nat) Repr() (res uint) {
+pure func (n *Nat) Repr() (res integer) {
 	return let _ := reveal n.AnnouncedLen() in
 		unfolding acc(n.Inv(), _) in limbsRepr(n.limbs)
 }
@@ -57,7 +57,7 @@ ghost
 requires acc(limbs, _)
 ensures  0 <= res && res < exp(2, _W * len(limbs))
 decreases
-pure func limbsRepr(limbs []uint) (res uint) {
+pure func limbsRepr(limbs []uint) (res integer) {
 	return limbsReprHelperLemma(limbsSeq(limbs, 0), 0)
 }
 
@@ -80,9 +80,55 @@ decreases
 pure func uintRange(i uint) (r uint)
 
 ghost
+opaque
+requires 0 <= e
+ensures  0 < b ==> 0 < r
+decreases e
+pure func exp(b, e int) (r integer) {
+	return e == 0 ? 1 : b * exp(b, e - 1)
+}
+
+ghost
+opaque
+requires 0 < b
+requires 0 <= e1 && 0 <= e2
+ensures  exp(b, e1) * exp(b, e2) == exp(b, e1 + e2)
+decreases e1 + e2
+pure func expLemma(b, e1, e2 int) bool {
+    return e1 == 0 ?
+        reveal exp(b, e1) == 1 :
+        // proof for else branch
+        let _ := reveal exp(b, e1) * exp(b, e2) == uint(b) * exp(b, e1 - 1) * exp(b, e2) in
+        let _ := reveal exp(b, e1 + e2) == uint(b) * exp(b, (e1 - 1) + e2) in
+        expLemma(b, e1 - 1, e2)
+}
+
+ghost
+ensures exp(b, 0) == 1
+decreases
+func expZeroLemma(b int) {
+    reveal exp(b, 0)
+}
+
+ghost
+decreases
+pure func gmax(a, b int) int {
+	return a >= b ? a : b
+}
+
+ensures r == gmax(a, b)
+decreases
+func max(a, b int) (r int) {
+	if a >= b {
+		return a
+	}
+	return b
+}
+
+ghost
 requires 0 <= idx && idx <= len(limbs)
 decreases len(limbs) - idx
-pure func limbsReprHelper(limbs seq[uint], idx int) (res uint) {
+pure func limbsReprHelper(limbs seq[uint], idx int) (res integer) {
 	return idx == len(limbs) ? 0 : uintRange(limbs[idx]) + exp(2, _W) * limbsReprHelper(limbs, idx + 1)
 }
 
@@ -92,10 +138,10 @@ requires 0 <= idx && idx <= len(limbs)
 ensures  res == limbsReprHelper(limbs, idx)
 ensures  0 <= res && res < exp(2, _W * (len(limbs) - idx))
 decreases len(limbs) - idx
-pure func limbsReprHelperLemma(limbs seq[uint], idx int) (res uint) {
+pure func limbsReprHelperLemma(limbs seq[uint], idx int) (res integer) {
     return let res := limbsReprHelper(limbs, idx) in
         idx == len(limbs) ? res :
-            // prove for else branch
+            // proof for else branch
             let prev_res := limbsReprHelperLemma(limbs, idx + 1) in
             let _ := mulLtLemma(prev_res, len(limbs) - idx) in
             res
@@ -104,19 +150,19 @@ pure func limbsReprHelperLemma(limbs seq[uint], idx int) (res uint) {
 ghost
 decreases
 requires 0 < diff
-requires a <= exp(2, _W * (diff - 1)) - 1
+requires 0 <= a && a <= exp(2, _W * (diff - 1)) - 1
 ensures  exp(2, _W) * a <= exp(2, _W * diff) - exp(2, _W)
-pure func mulLtLemma(a uint, diff int) bool {
+pure func mulLtLemma(a integer, diff int) bool {
     return let _ := mulIeqLemma(a, exp(2, _W * (diff - 1)) - 1, exp(2, _W)) in
     let _ := expLemma(2, _W, _W * (diff - 1)) in
     true
 }
 
 ghost
-requires a <= b && 0 <= c
+requires 0 <= a && a <= b && 0 <= c
 ensures  c * a <= c * b
 decreases
-pure func mulIeqLemma(a, b, c uint) bool {
+pure func mulIeqLemma(a, b, c integer) bool {
     return true
 }
 
@@ -334,52 +380,6 @@ func clear(limbs []uint) {
 		limbs[i] = 0
 	}
 	return
-}
-
-ghost
-opaque
-requires 0 <= e
-ensures  0 < b ==> 0 < r
-decreases e
-pure func exp(b, e int) (r uint) {
-	return e == 0 ? 1 : uint(b) * exp(b, e - 1)
-}
-
-ghost
-opaque
-requires 0 < b
-requires 0 <= e1 && 0 <= e2
-ensures  exp(b, e1) * exp(b, e2) == exp(b, e1 + e2)
-decreases e1 + e2
-pure func expLemma(b, e1, e2 int) bool {
-    return e1 == 0 ?
-        reveal exp(b, e1) == 1 :
-        // prove for else branch
-        let _ := reveal exp(b, e1) * exp(b, e2) == uint(b) * exp(b, e1 - 1) * exp(b, e2) in
-        let _ := reveal exp(b, e1 + e2) == uint(b) * exp(b, (e1 - 1) + e2) in
-        expLemma(b, e1 - 1, e2)
-}
-
-ghost
-ensures exp(b, 0) == 1
-decreases
-func expZeroLemma(b int) {
-    reveal exp(b, 0)
-}
-
-ghost
-decreases
-pure func gmax(a, b int) int {
-	return a >= b ? a : b
-}
-
-ensures r == gmax(a, b)
-decreases
-func max(a, b int) (r int) {
-	if a >= b {
-		return a
-	}
-	return b
 }
 //// end functions missing in Gobra ////
 

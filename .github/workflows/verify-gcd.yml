@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     container:
-      image: ghcr.io/viperproject/gobra:v26.02
+      image: ghcr.io/viperproject/gobra:sha-eff4f89
     steps:
       - name: Install git
         run: apt-get update && apt-get install -y git
