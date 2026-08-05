@@ -1411,12 +1411,12 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	D.setOne()
 
 	// Establish relational invariants (conditional on fullProof):
-	// u = a = 1*a - 0*m, so nonLinearSub(a, 1, 0, a, m) holds.
-	// v = m = 1*m - 0*a, so nonLinearSub(m, 1, 0, m, a) holds.
+	// u = a = 1*a - 0*m, so a == nonLinearSub(1, 0, a, m) holds.
+	// v = m = 1*m - 0*a, so m == nonLinearSub(1, 0, m, a) holds.
 	/*@
 	ghost if fullProof {
-		assert reveal nonLinearSub(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
-		assert reveal nonLinearSub(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
+		assert u.Repr() == reveal nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
+		assert v.Repr() == reveal nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr())
 	}
 	@*/
 
@@ -1459,8 +1459,8 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	//@ invariant fullProof ==> 0 <= C.Repr() && C.Repr() < m.Repr() // range for C
 	//@ invariant fullProof ==> 0 <= D.Repr() && D.Repr() <= a.Repr() // range for D
 	// Conditional invariants — relational (abstract to avoid NIA):
-	//@ invariant fullProof ==> nonLinearSub(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
-	//@ invariant fullProof ==> nonLinearSub(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
+	//@ invariant fullProof ==> u.Repr() == nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
+	//@ invariant fullProof ==> v.Repr() == nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr())
 	//@ decreases u.Repr() + v.Repr()
 	for {
 		// If both u and v are odd, subtract the smaller from the larger.
@@ -1556,7 +1556,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 			// for the postcondition: u = A*a - B*m (only when fullProof).
 			/*@
 			ghost if fullProof {
-				assert reveal nonLinearSub(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
+				assert u.Repr() == reveal nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
 			}
 			@*/
 			return u, A, nil /*@, B.Repr() @*/
@@ -1615,8 +1615,8 @@ func rshift1(a *Nat, carry uint) {
 // Ghost relational preconditions (conditional):
 //@ requires fullProof ==> A + C == X.Repr() + Y.Repr()
 //@ requires fullProof ==> B + D == Z.Repr() + W.Repr()
-//@ requires fullProof ==> nonLinearSub(U, A, B, bound2.Repr(), bound1.Repr())
-//@ requires fullProof ==> nonLinearSub(V, D, C, bound1.Repr(), bound2.Repr())
+//@ requires fullProof ==> U == nonLinearSub(A, B, bound2.Repr(), bound1.Repr())
+//@ requires fullProof ==> V == nonLinearSub(D, C, bound1.Repr(), bound2.Repr())
 //@ requires fullProof ==> 0 < U && U <= bound2.Repr()
 //@ requires fullProof ==> 0 <= V && V <= bound1.Repr()
 //@ requires fullProof ==> 0 < bound2.Repr() && bound2.Repr() < bound1.Repr()
@@ -1636,8 +1636,8 @@ func rshift1(a *Nat, carry uint) {
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() <  bound1.Repr() ==> Z.Repr() == old(Z.Repr()) + W.Repr())
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() >= bound1.Repr() ==> Z.Repr() == old(Z.Repr()) + W.Repr() - bound2.Repr())
 // Ghost relational postconditions (conditional):
-//@ ensures  fullProof ==> nonLinearSub(U - V, X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
-//@ ensures  fullProof ==> nonLinearSub(V - U, Z.Repr(), X.Repr(), bound1.Repr(), bound2.Repr())
+//@ ensures  fullProof ==> U - V == nonLinearSub(X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
+//@ ensures  fullProof ==> V - U == nonLinearSub(Z.Repr(), X.Repr(), bound1.Repr(), bound2.Repr())
 // Sync facts (for range reasoning at call sites, conditional):
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() <  bound1.Repr() ==> old(Z.Repr()) + W.Repr() <= bound2.Repr())
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() >= bound1.Repr() ==> old(Z.Repr()) + W.Repr() >= bound2.Repr())
@@ -1697,8 +1697,8 @@ func syncAdd(X, Y, Z, W, bound1, bound2 *Nat /*@, ghost U, V, A, B, C, D integer
 		ghost if old(X.Repr()) + Y.Repr() >= bound1.Repr() {
 			modAddLemma(A, B, C, D, X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
 		}
-		assert reveal nonLinearSub(U - V, X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
-		assert reveal nonLinearSub(V - U, Z.Repr(), X.Repr(), bound1.Repr(), bound2.Repr())
+		assert U - V == reveal nonLinearSub(X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
+		assert V - U == reveal nonLinearSub(Z.Repr(), X.Repr(), bound1.Repr(), bound2.Repr())
 	}
 	@*/
 }

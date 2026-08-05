@@ -357,8 +357,8 @@ func gcd_even_odd_div2_2(a, b integer) {
 ghost
 opaque
 decreases
-pure func nonLinearSub(u, A, B, aVal, mVal integer) bool {
-    return u == A * aVal - B * mVal
+pure func nonLinearSub(A, B, aVal, mVal integer) integer {
+    return A * aVal - B * mVal
 }
 //// end lemmas for GCD ////
 
@@ -454,8 +454,8 @@ func prodParityLemma(a, b integer)
 */
 ghost
 trusted
-requires nonLinearSub(u, A, B, a, m)
-requires nonLinearSub(v, D, C, m, a)
+requires u == nonLinearSub(A, B, a, m)
+requires v == nonLinearSub(D, C, m, a)
 requires u <= a && 0 <= v
 requires A + C >= m
 requires 0 < a && a < m && 0 < m
@@ -495,8 +495,8 @@ func AC_ge_BD_ge(u, v, A, B, C, D, a, m integer)
 */
 ghost
 trusted
-requires nonLinearSub(u, A, B, a, m)
-requires nonLinearSub(v, D, C, m, a)
+requires u == nonLinearSub(A, B, a, m)
+requires v == nonLinearSub(D, C, m, a)
 requires 0 < u && v <= m
 requires A + C < m
 requires 0 < a && 0 < m
@@ -519,13 +519,13 @@ func distLemma(a, b, c integer) {
 // u = A*a - B*m and v = D*m - C*a imply u - v = (A+C)*a - (B+D)*m.
 // Isolates the reveal + distLemma NIA from later proof steps.
 ghost
-requires nonLinearSub(u, A, B, a, m)
-requires nonLinearSub(v, D, C, m, a)
+requires u == nonLinearSub(A, B, a, m)
+requires v == nonLinearSub(D, C, m, a)
 ensures u - v == (A + C) * a - (B + D) * m
 decreases
 func subExpandLemma(u, v, A, B, C, D, a, m integer) {
-    reveal nonLinearSub(u, A, B, a, m)
-    reveal nonLinearSub(v, D, C, m, a)
+    reveal nonLinearSub(A, B, a, m)
+    reveal nonLinearSub(D, C, m, a)
     distLemma(A, C, a)
     distLemma(B, D, m)
 }
@@ -575,7 +575,7 @@ func modAddLemma(A, B, C, D, Ap, Bp, a, m integer) {
 // Parity lemma: when u = A*a - B*m is even and A or B is odd,
 // then A+m and B+a are both even. Reveals nonLinearSub only for parity reasoning.
 ghost
-requires nonLinearSub(u, A, B, a, m)
+requires u == nonLinearSub(A, B, a, m)
 requires u % 2 == 0
 requires A >= 0 && B >= 0 && a >= 0 && m >= 0
 requires a % 2 != 0 || m % 2 != 0
@@ -584,105 +584,105 @@ ensures (A + m) % 2 == 0
 ensures (B + a) % 2 == 0
 decreases
 func parityLemma(u, A, B, a, m integer) {
-    reveal nonLinearSub(u, A, B, a, m)
+    reveal nonLinearSub(A, B, a, m)
     prodParityLemma(A, a)
     prodParityLemma(B, m)
 }
 
 // Relational invariant maintenance for halving u:
 ghost
-requires nonLinearSub(u * 2, A * 2, B * 2, a, m)
+requires u * 2 == nonLinearSub(A * 2, B * 2, a, m)
 requires 0 < u
 requires 0 <= A && A * 2 < m // range for A
 requires 0 <= B && B * 2 <= a // range for B
-ensures nonLinearSub(u, A, B, a, m)
+ensures  u == nonLinearSub(A, B, a, m)
 decreases
 func halvRelLemmaU1(u, A, B, a, m integer) {
 	uOld := u * 2
 	AOld := A * 2
 	BOld := B * 2
-	assert reveal nonLinearSub(uOld, AOld, BOld, a, m)
+	assert uOld == reveal nonLinearSub(AOld, BOld, a, m)
 	distLemma(A, A, a)
 	distLemma(B, B, m)
-	assert reveal nonLinearSub(u, A, B, a, m)
+	assert u == reveal nonLinearSub(A, B, a, m)
 }
 
 ghost
-requires nonLinearSub(u * 2, A * 2 - m, B * 2 - a, a, m)
+requires u * 2 == nonLinearSub(A * 2 - m, B * 2 - a, a, m)
 requires 0 < u
 requires 0 < m && A < m && m <= A * 2 // range for m
 requires 0 < a && B <= a && a <= B * 2 // range for a
-ensures nonLinearSub(u, A, B, a, m)
-ensures 0 <= A
-ensures 0 <= B && B < a
+ensures  u == nonLinearSub(A, B, a, m)
+ensures  0 <= A
+ensures  0 <= B && B < a
 decreases
 func halvRelLemmaU2(u, A, B, a, m integer) {
 	uOld := u * 2
 	AOld := A * 2 - m
 	BOld := B * 2 - a
-	assert reveal nonLinearSub(uOld, AOld, BOld, a, m)
+	assert uOld == reveal nonLinearSub(AOld, BOld, a, m)
 	distLemma(A, A, a)
 	distLemma(B, B, m)
 	distLemma(AOld, m, a)
 	distLemma(BOld, a, m)
-	assert reveal nonLinearSub(u, A, B, a, m)
+	assert u == reveal nonLinearSub(A, B, a, m)
 }
 
 // Parity lemma for v: when v = D*m - C*a is even and C or D is odd,
 // then C+m and D+a are both even.
 ghost
-requires nonLinearSub(v, D, C, m, a)
+requires v == nonLinearSub(D, C, m, a)
 requires v % 2 == 0
 requires C >= 0 && D >= 0 && a >= 0 && m >= 0
 requires a % 2 != 0 || m % 2 != 0
 requires C % 2 != 0 || D % 2 != 0
-ensures (C + m) % 2 == 0
-ensures (D + a) % 2 == 0
+ensures  (C + m) % 2 == 0
+ensures  (D + a) % 2 == 0
 decreases
 func parityLemmaV(v, C, D, a, m integer) {
-    reveal nonLinearSub(v, D, C, m, a)
+    reveal nonLinearSub(D, C, m, a)
     prodParityLemma(C, a)
     prodParityLemma(D, m)
 }
 
 // Relational invariant maintenance for halving v (mirrors halvRelLemmaU):
 ghost
-requires nonLinearSub(v * 2, D * 2, C * 2, m, a)
+requires v * 2 == nonLinearSub(D * 2, C * 2, m, a)
 requires 0 < a
 requires 0 <= C && C * 2 < m // range for C
 requires 0 <= D && D * 2 <= a // range for D
-ensures nonLinearSub(v, D, C, m, a)
+ensures  v == nonLinearSub(D, C, m, a)
 decreases
 func halvRelLemmaV1(v, C, D, a, m integer) {
 	vOld := v * 2
 	COld := C * 2
 	DOld := D * 2
-	assert reveal nonLinearSub(vOld, DOld, COld, m, a)
+	assert vOld == reveal nonLinearSub(DOld, COld, m, a)
 	assert COld == 2 * C
 	assert DOld == 2 * D
 	distLemma(C, C, a)
 	distLemma(D, D, m)
-	assert reveal nonLinearSub(v, D, C, m, a)
+	assert v == reveal nonLinearSub(D, C, m, a)
 }
 
 ghost
-requires nonLinearSub(v * 2, D * 2 - a, C * 2 - m, m, a)
+requires v * 2 == nonLinearSub(D * 2 - a, C * 2 - m, m, a)
 requires 0 < m
 requires C < m && m <= C * 2 // range for m
 requires 0 < a && D <= a && a <= D * 2 // range for a
-ensures nonLinearSub(v, D, C, m, a)
-ensures 0 <= C
-ensures 0 <= D
+ensures  v == nonLinearSub(D, C, m, a)
+ensures  0 <= C
+ensures  0 <= D
 decreases
 func halvRelLemmaV2(v, C, D, a, m integer) {
 	vOld := v * 2
 	COld := C * 2 - m
 	DOld := D * 2 - a
-	assert reveal nonLinearSub(vOld, DOld, COld, m, a)
+	assert vOld == reveal nonLinearSub(DOld, COld, m, a)
 	distLemma(C, C, a)
 	distLemma(D, D, m)
 	distLemma(COld, m, a)
 	distLemma(DOld, a, m)
-	assert reveal nonLinearSub(v, D, C, m, a)
+	assert v == reveal nonLinearSub(D, C, m, a)
 }
 //// end non-linear arithmetic lemmas ////
