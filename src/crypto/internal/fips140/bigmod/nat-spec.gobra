@@ -352,13 +352,19 @@ func gcd_even_odd_div2_2(a, b integer) {
     gcdCommLemma(b / 2, a) // gcd(b / 2, a) == gcd(a, b / 2)
 }
 
-// Opaque relational predicate. This hides the non-linear terms (products)
-// from Z3 to avoid NIA timeouts. Use `reveal` to open at specific points.
+// Opaque multiplication. Keeping each product opaque prevents unrelated
+// non-linear terms from being exposed to Z3 at the same time.
 ghost
 opaque
 decreases
+pure func nonLinearMul(x, y integer) integer {
+    return x * y
+}
+
+ghost
+decreases
 pure func nonLinearSub(A, B, aVal, mVal integer) integer {
-    return A * aVal - B * mVal
+    return nonLinearMul(A, aVal) - nonLinearMul(B, mVal)
 }
 //// end lemmas for GCD ////
 
@@ -506,28 +512,23 @@ func AC_lt_BD_le(u, v, A, B, C, D, a, m integer)
 //// end trusted non-linear arithmetic lemmas with Lean formalization ////
 
 //// begin non-linear arithmetic lemmas ////
-// Distributive law: (a + b) * c == a * c + b * c
-// This isolates a single NIA fact for Z3.
+// Algebraic interface for opaque multiplication. The non-linear reasoning is
+// confined to these small helpers; callers only see equalities between opaque
+// products.
 ghost
-ensures (a + b) * c == a * c + b * c
+ensures nonLinearMul(x + y, z) == nonLinearMul(x, z) + nonLinearMul(y, z)
 decreases
-func distLemma(a, b, c integer) {
-	// no body needed
+func mulAdd(x, y, z integer) {
+	assert reveal nonLinearMul(x + y, z) == (x + y) * z
+	assert reveal nonLinearMul(x, z) == x * z
+	assert reveal nonLinearMul(y, z) == y * z
 }
 
-// Expand u - v using relational invariants:
-// u = A*a - B*m and v = D*m - C*a imply u - v = (A+C)*a - (B+D)*m.
-// Isolates the reveal + distLemma NIA from later proof steps.
 ghost
-requires u == nonLinearSub(A, B, a, m)
-requires v == nonLinearSub(D, C, m, a)
-ensures u - v == (A + C) * a - (B + D) * m
+ensures nonLinearMul(x, y) == nonLinearMul(y, x)
 decreases
-func subExpandLemma(u, v, A, B, C, D, a, m integer) {
-    reveal nonLinearSub(A, B, a, m)
-    reveal nonLinearSub(D, C, m, a)
-    distLemma(A, C, a)
-    distLemma(B, D, m)
+func mulComm(x, y integer) {
+	assert reveal nonLinearMul(x, y) == reveal nonLinearMul(y, x)
 }
 
 // Modular addition preserves linear combinations (when wrapping is synchronized).
@@ -546,24 +547,23 @@ func subExpandLemma(u, v, A, B, C, D, a, m integer) {
 //
 // The only NIA fact used is commutativity: m*a = a*m.
 ghost
-requires a > 0 && m > 0
+requires 0 < a
 requires 0 <= A && A < m && 0 <= C && C < m
 requires 0 <= B && B <= a && 0 <= D && D <= a
-requires (A + C >= m) == (B + D >= a)
-requires A + C < m ==> Ap == A + C
-requires A + C >= m ==> Ap == A + C - m
-requires B + D < a ==> Bp == B + D
-requires B + D >= a ==> Bp == B + D - a
-ensures (A + C) * a - (B + D) * m == Ap * a - Bp * m
+requires A + C < m ==> Ap == A + C && Bp == B + D
+requires A + C >= m ==> Ap == A + C - m && Bp == B + D - a
+ensures  nonLinearSub(A, B, a, m) - nonLinearSub(D, C, m, a) == nonLinearSub(Ap, Bp, a, m)
 decreases
 func modAddLemma(A, B, C, D, Ap, Bp, a, m integer) {
+	mulAdd(A, C, a)
+	mulAdd(B, D, m)
 	if A + C < m {
 		// Neither wraps: Ap = A+C, Bp = B+D. Trivial.
 	} else {
 		// Both wrap: Ap = A+C-m, Bp = B+D-a.
-		// Use distLemma to expand the products:
-		distLemma(Ap, m, a)  // (Ap+m)*a == Ap*a + m*a, i.e., (A+C)*a == Ap*a + m*a
-		distLemma(Bp, a, m)  // (Bp+a)*m == Bp*m + a*m, i.e., (B+D)*m == Bp*m + a*m
+		mulAdd(Ap, m, a)
+		mulAdd(Bp, a, m)
+		mulComm(m, a)
 		// Now Z3 has:
 		//   (A+C)*a == Ap*a + m*a
 		//   (B+D)*m == Bp*m + a*m
@@ -573,116 +573,64 @@ func modAddLemma(A, B, C, D, Ap, Bp, a, m integer) {
 }
 
 // Parity lemma: when u = A*a - B*m is even and A or B is odd,
-// then A+m and B+a are both even. Reveals nonLinearSub only for parity reasoning.
+// then A+m and B+a are both even. Reveals the two products only for parity reasoning.
 ghost
 requires u == nonLinearSub(A, B, a, m)
 requires u % 2 == 0
 requires A >= 0 && B >= 0 && a >= 0 && m >= 0
 requires a % 2 != 0 || m % 2 != 0
 requires A % 2 != 0 || B % 2 != 0
-ensures (A + m) % 2 == 0
-ensures (B + a) % 2 == 0
+ensures  (A + m) % 2 == 0
+ensures  (B + a) % 2 == 0
 decreases
 func parityLemma(u, A, B, a, m integer) {
-    reveal nonLinearSub(A, B, a, m)
+    assert u == reveal nonLinearMul(A, a) - reveal nonLinearMul(B, m)
     prodParityLemma(A, a)
     prodParityLemma(B, m)
 }
 
-// Relational invariant maintenance for halving u:
+// Relational invariant maintenance when both coefficients are halved without
+// modular adjustment. This applies symmetrically to u and v.
 ghost
-requires u * 2 == nonLinearSub(A * 2, B * 2, a, m)
-requires 0 < u
-requires 0 <= A && A * 2 < m // range for A
-requires 0 <= B && B * 2 <= a // range for B
-ensures  u == nonLinearSub(A, B, a, m)
+requires x * 2 == nonLinearSub(P * 2, Q * 2, p, q)
+ensures  x == nonLinearSub(P, Q, p, q)
 decreases
-func halvRelLemmaU1(u, A, B, a, m integer) {
-	uOld := u * 2
-	AOld := A * 2
-	BOld := B * 2
-	assert uOld == reveal nonLinearSub(AOld, BOld, a, m)
-	distLemma(A, A, a)
-	distLemma(B, B, m)
-	assert u == reveal nonLinearSub(A, B, a, m)
+func halveRel(x, P, Q, p, q integer) {
+	mulAdd(P, P, p)
+	mulAdd(Q, Q, q)
 }
 
+// Relational invariant maintenance when the coefficients are adjusted by
+// their opposite moduli before halving. This also applies to both u and v.
 ghost
-requires u * 2 == nonLinearSub(A * 2 - m, B * 2 - a, a, m)
-requires 0 < u
-requires 0 < m && A < m && m <= A * 2 // range for m
-requires 0 < a && B <= a && a <= B * 2 // range for a
-ensures  u == nonLinearSub(A, B, a, m)
-ensures  0 <= A
-ensures  0 <= B && B < a
+requires x * 2 == nonLinearSub(P * 2 - q, Q * 2 - p, p, q)
+ensures  x == nonLinearSub(P, Q, p, q)
 decreases
-func halvRelLemmaU2(u, A, B, a, m integer) {
-	uOld := u * 2
-	AOld := A * 2 - m
-	BOld := B * 2 - a
-	assert uOld == reveal nonLinearSub(AOld, BOld, a, m)
-	distLemma(A, A, a)
-	distLemma(B, B, m)
-	distLemma(AOld, m, a)
-	distLemma(BOld, a, m)
-	assert u == reveal nonLinearSub(A, B, a, m)
+func halveRelAdjusted(x, P, Q, p, q integer) {
+	POld := P * 2 - q
+	QOld := Q * 2 - p
+	mulAdd(P, P, p)
+	mulAdd(Q, Q, q)
+	mulAdd(POld, q, p)
+	mulAdd(QOld, p, q)
+	mulComm(q, p)
 }
 
-// Parity lemma for v: when v = D*m - C*a is even and C or D is odd,
-// then C+m and D+a are both even.
+// In the u relation, positivity makes the subtractive coefficient strictly
+// smaller than its modulus. The v path does not need this extra strictness
+// argument.
 ghost
-requires v == nonLinearSub(D, C, m, a)
-requires v % 2 == 0
-requires C >= 0 && D >= 0 && a >= 0 && m >= 0
-requires a % 2 != 0 || m % 2 != 0
-requires C % 2 != 0 || D % 2 != 0
-ensures  (C + m) % 2 == 0
-ensures  (D + a) % 2 == 0
+requires 0 < x && 0 < p
+requires P < q && Q <= p
+requires x == nonLinearSub(P, Q, p, q)
+ensures  Q < p
 decreases
-func parityLemmaV(v, C, D, a, m integer) {
-    reveal nonLinearSub(D, C, m, a)
-    prodParityLemma(C, a)
-    prodParityLemma(D, m)
-}
-
-// Relational invariant maintenance for halving v (mirrors halvRelLemmaU):
-ghost
-requires v * 2 == nonLinearSub(D * 2, C * 2, m, a)
-requires 0 < a
-requires 0 <= C && C * 2 < m // range for C
-requires 0 <= D && D * 2 <= a // range for D
-ensures  v == nonLinearSub(D, C, m, a)
-decreases
-func halvRelLemmaV1(v, C, D, a, m integer) {
-	vOld := v * 2
-	COld := C * 2
-	DOld := D * 2
-	assert vOld == reveal nonLinearSub(DOld, COld, m, a)
-	assert COld == 2 * C
-	assert DOld == 2 * D
-	distLemma(C, C, a)
-	distLemma(D, D, m)
-	assert v == reveal nonLinearSub(D, C, m, a)
-}
-
-ghost
-requires v * 2 == nonLinearSub(D * 2 - a, C * 2 - m, m, a)
-requires 0 < m
-requires C < m && m <= C * 2 // range for m
-requires 0 < a && D <= a && a <= D * 2 // range for a
-ensures  v == nonLinearSub(D, C, m, a)
-ensures  0 <= C
-ensures  0 <= D
-decreases
-func halvRelLemmaV2(v, C, D, a, m integer) {
-	vOld := v * 2
-	COld := C * 2 - m
-	DOld := D * 2 - a
-	assert vOld == reveal nonLinearSub(DOld, COld, m, a)
-	distLemma(C, C, a)
-	distLemma(D, D, m)
-	distLemma(COld, m, a)
-	distLemma(DOld, a, m)
-	assert v == reveal nonLinearSub(D, C, m, a)
+func strictSubCoefficient(x, P, Q, p, q integer) {
+	assert Q < p by contra {
+		assert Q == p
+		assert reveal nonLinearMul(P, p) == P * p
+		assert reveal nonLinearMul(q, p) == q * p
+		mulComm(q, p)
+	}
 }
 //// end non-linear arithmetic lemmas ////

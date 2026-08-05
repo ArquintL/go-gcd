@@ -1411,8 +1411,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	D.setOne()
 
 	// Establish relational invariants (conditional on fullProof):
-	// u = a = 1*a - 0*m, so a == nonLinearSub(1, 0, a, m) holds.
-	// v = m = 1*m - 0*a, so m == nonLinearSub(1, 0, m, a) holds.
+	// u = a = 1*a - 0*m and v = m = 1*m - 0*a.
 	/*@
 	ghost if fullProof {
 		assert u.Repr() == reveal nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
@@ -1509,7 +1508,8 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 				rshift1(B, B.add(a /*@, p / 4 @*/))
 				/*@
 				ghost if fullProof {
-					halvRelLemmaU2(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
+					halveRelAdjusted(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
+					strictSubCoefficient(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
 				}
 				@*/
 			} else {
@@ -1517,7 +1517,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 				rshift1(B, 0)
 				/*@
 				ghost if fullProof {
-					halvRelLemmaU1(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
+					halveRel(u.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
 				}
 				@*/
 			}
@@ -1528,14 +1528,14 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 			if C.IsOdd(/*@ p / 2 @*/) == yes || D.IsOdd(/*@ p / 2 @*/) == yes {
 				/*@
 				ghost if fullProof {
-					parityLemmaV(preV, C.Repr(), D.Repr(), a.Repr(), m.Repr())
+					parityLemma(preV, D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
 				rshift1(C, C.add(m /*@, p / 4 @*/))
 				rshift1(D, D.add(a /*@, p / 4 @*/))
 				/*@
 				ghost if fullProof {
-					halvRelLemmaV2(v.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+					halveRelAdjusted(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
 			} else {
@@ -1543,7 +1543,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 				rshift1(D, 0)
 				/*@
 				ghost if fullProof {
-					halvRelLemmaV1(v.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+					halveRel(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
 			}
@@ -1689,16 +1689,7 @@ func syncAdd(X, Y, Z, W, bound1, bound2 *Nat /*@, ghost U, V, A, B, C, D integer
 	// Prove nonLinearSub postconditions (conditional on fullProof):
 	/*@
 	ghost if fullProof {
-		// subExpandLemma: U - V = (A + C) * bound2 - (B + D) * bound1
-		subExpandLemma(U, V, A, B, C, D, bound2.Repr(), bound1.Repr())
-		// In the wrap case, modAddLemma bridges:
-		//   (A + C) * bound2 - (B + D) * bound1 = X.Repr() * bound2 - Z.Repr() * bound1
-		// In the no-wrap case, X.Repr() = A + C and Z.Repr() = B + D, so the equation holds trivially.
-		ghost if old(X.Repr()) + Y.Repr() >= bound1.Repr() {
-			modAddLemma(A, B, C, D, X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
-		}
-		assert U - V == reveal nonLinearSub(X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
-		assert V - U == reveal nonLinearSub(Z.Repr(), X.Repr(), bound1.Repr(), bound2.Repr())
+		modAddLemma(A, B, C, D, X.Repr(), Z.Repr(), bound2.Repr(), bound1.Repr())
 	}
 	@*/
 }
