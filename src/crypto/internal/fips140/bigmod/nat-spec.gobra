@@ -351,21 +351,6 @@ func gcd_even_odd_div2_2(a, b integer) {
     gcd_even_odd_div2(b, a)     // gcd(b, a) == gcd(b / 2, a)
     gcdCommLemma(b / 2, a) // gcd(b / 2, a) == gcd(a, b / 2)
 }
-
-// Opaque multiplication. Keeping each product opaque prevents unrelated
-// non-linear terms from being exposed to Z3 at the same time.
-ghost
-opaque
-decreases
-pure func nonLinearMul(x, y integer) integer {
-    return x * y
-}
-
-ghost
-decreases
-pure func nonLinearSub(A, B, aVal, mVal integer) integer {
-    return nonLinearMul(A, aVal) - nonLinearMul(B, mVal)
-}
 //// end lemmas for GCD ////
 
 //// begin functions missing in Gobra ////
@@ -512,6 +497,29 @@ func AC_lt_BD_le(u, v, A, B, C, D, a, m integer)
 //// end trusted non-linear arithmetic lemmas with Lean formalization ////
 
 //// begin non-linear arithmetic lemmas ////
+// Opaque multiplication. Keeping each product opaque prevents unrelated
+// non-linear terms from being exposed to Z3 at the same time.
+ghost
+opaque
+decreases
+pure func nonLinearMul(x, y integer) integer {
+    return x * y
+}
+
+ghost
+decreases
+pure func nonLinearSub(A, B, aVal, mVal integer) integer {
+    return nonLinearMul(A, aVal) - nonLinearMul(B, mVal)
+}
+
+ghost
+ensures nonLinearMul(x, y) == nonLinearMul(y, x)
+decreases
+func mulComm(x, y integer) {
+    reveal nonLinearMul(x, y)
+    reveal nonLinearMul(y, x)
+}
+
 // Algebraic interface for opaque multiplication. The non-linear reasoning is
 // confined to these small helpers; callers only see equalities between opaque
 // products.
@@ -519,16 +527,9 @@ ghost
 ensures nonLinearMul(x + y, z) == nonLinearMul(x, z) + nonLinearMul(y, z)
 decreases
 func mulAdd(x, y, z integer) {
-	assert reveal nonLinearMul(x + y, z) == (x + y) * z
-	assert reveal nonLinearMul(x, z) == x * z
-	assert reveal nonLinearMul(y, z) == y * z
-}
-
-ghost
-ensures nonLinearMul(x, y) == nonLinearMul(y, x)
-decreases
-func mulComm(x, y integer) {
-	assert reveal nonLinearMul(x, y) == reveal nonLinearMul(y, x)
+	reveal nonLinearMul(x + y, z)
+	reveal nonLinearMul(x, z)
+	reveal nonLinearMul(y, z)
 }
 
 // Modular addition preserves linear combinations (when wrapping is synchronized).

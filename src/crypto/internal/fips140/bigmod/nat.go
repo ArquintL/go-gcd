@@ -1413,9 +1413,13 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	// Establish relational invariants (conditional on fullProof):
 	// u = a = 1*a - 0*m and v = m = 1*m - 0*a.
 	/*@
-	ghost if fullProof {
-		assert u.Repr() == reveal nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
-		assert v.Repr() == reveal nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr())
+	assert fullProof ==>
+		u.Repr() == nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr()) &&
+		v.Repr() == nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr()) by contra {
+		assert reveal nonLinearMul(A.Repr(), a.Repr()) == A.Repr() * a.Repr()
+		assert reveal nonLinearMul(B.Repr(), m.Repr()) == B.Repr() * m.Repr()
+		assert reveal nonLinearMul(D.Repr(), m.Repr()) == D.Repr() * m.Repr()
+		assert reveal nonLinearMul(C.Repr(), a.Repr()) == C.Repr() * a.Repr()
 	}
 	@*/
 
@@ -1554,11 +1558,8 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 			//@ gcdBaseLemma(u.Repr())
 			// Open the opaque relational invariant to get the actual equation
 			// for the postcondition: u = A*a - B*m (only when fullProof).
-			/*@
-			ghost if fullProof {
-				assert u.Repr() == reveal nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
-			}
-			@*/
+			//@ reveal nonLinearMul(A.Repr(), a.Repr())
+			//@ reveal nonLinearMul(B.Repr(), m.Repr())
 			return u, A, nil /*@, B.Repr() @*/
 		}
 	}
@@ -1643,7 +1644,7 @@ func rshift1(a *Nat, carry uint) {
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() >= bound1.Repr() ==> old(Z.Repr()) + W.Repr() >= bound2.Repr())
 //@ decreases
 func syncAdd(X, Y, Z, W, bound1, bound2 *Nat /*@, ghost U, V, A, B, C, D integer, ghost fullProof bool, ghost p perm @*/) {
-	// Establish sync preconditions from nonLinearSub via AC_ge_BD_ge / AC_lt_BD_le:
+	// Establish synchronized-wrap preconditions via AC_ge_BD_ge / AC_lt_BD_le:
 	/*@
 	ghost if fullProof {
 		ghost if A + C >= bound1.Repr() {
