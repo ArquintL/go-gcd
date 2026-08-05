@@ -1385,7 +1385,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	//
 	// Note this algorithm does not handle either input being zero.
 
-	//@ fullProof := a.Repr() < m.Repr()
+	//@ ghost fullProof := a.Repr() < m.Repr()
 
 	if a.IsZero(/*@ p / 2 @*/) == yes || m.IsZero(/*@ p / 2 @*/) == yes {
 		return nil, nil, errors.New("extendedGCD: a or m is zero") /*@, 0 @*/
