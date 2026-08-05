@@ -1311,7 +1311,7 @@ func (out *Nat) ExpShortVarTime(x *Nat, e uint, m *Modulus) *Nat {
 //@ ensures  ok ==> x.AnnouncedLen() == m.AnnouncedLen()
 //@ ensures !ok ==> x.Repr() == old(x.Repr()) && x.AnnouncedLen() == old(x.AnnouncedLen()) // x is not modified on failure
 //@ decreases
-func (x *Nat) InverseVarTime(a *Nat, m *Modulus /*@, ghost p perm @*/) (r *Nat, ok bool /*@, ghost BRepr uint @*/) {
+func (x *Nat) InverseVarTime(a *Nat, m *Modulus /*@, ghost p perm @*/) (r *Nat, ok bool /*@, ghost BRepr integer @*/) {
 	//@ unfold acc(m.Inv(), p/2)
 	u, A, err /*@, BRepr @*/ := extendedGCD(a, m.nat /*@, p/4 @*/)
 	//@ fold acc(m.Inv(), p/2)
@@ -1360,7 +1360,7 @@ func (x *Nat) GCDVarTime(a, b *Nat /*@, ghost p perm @*/) (r *Nat, err error) {
 //@ ensures  err == nil ==> u.AnnouncedLen() == gmax(a.AnnouncedLen(), m.AnnouncedLen())
 //@ ensures  err == nil ==> A.AnnouncedLen() == m.AnnouncedLen()
 //@ decreases
-func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, ghost BRepr uint @*/) {
+func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, ghost BRepr integer @*/) {
 	// This is the extended binary GCD algorithm described in the Handbook of
 	// Applied Cryptography, Algorithm 14.61, adapted by BoringSSL to bound
 	// coefficients and avoid negative numbers. For more details and proof of
@@ -1642,7 +1642,7 @@ func rshift1(a *Nat, carry uint) {
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() <  bound1.Repr() ==> old(Z.Repr()) + W.Repr() <= bound2.Repr())
 //@ ensures  fullProof ==> (old(X.Repr()) + Y.Repr() >= bound1.Repr() ==> old(Z.Repr()) + W.Repr() >= bound2.Repr())
 //@ decreases
-func syncAdd(X, Y, Z, W, bound1, bound2 *Nat /*@, ghost U, V, A, B, C, D uint, ghost fullProof bool, ghost p perm @*/) {
+func syncAdd(X, Y, Z, W, bound1, bound2 *Nat /*@, ghost U, V, A, B, C, D integer, ghost fullProof bool, ghost p perm @*/) {
 	// Establish sync preconditions from nonLinearSub via AC_ge_BD_ge / AC_lt_BD_le:
 	/*@
 	ghost if fullProof {

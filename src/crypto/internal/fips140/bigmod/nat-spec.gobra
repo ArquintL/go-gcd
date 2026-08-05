@@ -242,7 +242,7 @@ pure func (m *Modulus) AnnouncedLen() (res int) {
 ghost
 requires acc(m.Inv(), _)
 decreases
-pure func (m *Modulus) Repr() uint {
+pure func (m *Modulus) Repr() integer {
     return unfolding acc(m.Inv(), _) in m.nat.Repr()
 }
 //// end Modulus ////
@@ -252,7 +252,7 @@ ghost
 opaque
 requires  0 <= a && 0 <= m
 decreases m
-pure func gcd(a, m uint) uint {
+pure func gcd(a, m integer) integer {
     return m == 0 ? a : gcd(m, a % m)
 }
 
@@ -261,7 +261,7 @@ ghost
 requires 0 <= a
 ensures  gcd(a, 0) == a
 decreases
-func gcdBaseLemma(a uint) {
+func gcdBaseLemma(a integer) {
     reveal gcd(a, 0)
 }
 
@@ -270,7 +270,7 @@ ghost
 requires 0 < b && b < a
 ensures  gcd(a, b) == gcd(a - b, b)
 decreases
-func gcd_sub_diag_l(a, b uint) {
+func gcd_sub_diag_l(a, b integer) {
     reveal gcd(a, b)       // gcd(a, b) == gcd(b, a % b)
     reveal gcd(a - b, b)   // gcd(a-b, b) == gcd(b, (a-b) % b)
     modSubLemma(a, b)      // a % b == (a - b) % b
@@ -281,7 +281,7 @@ ghost
 requires 0 <= a && 0 <= b
 ensures gcd(a, b) == gcd(b, a)
 decreases
-func gcdCommLemma(a, b uint) {
+func gcdCommLemma(a, b integer) {
     if a == b {
         // reflexive
     } else if a == 0 || a < b {
@@ -296,7 +296,7 @@ ghost
 requires 0 < a && a <= b
 ensures gcd(a, b) == gcd(a, b - a)
 decreases
-func gcd_sub_diag_l2(a, b uint) {
+func gcd_sub_diag_l2(a, b integer) {
     if a == b {
         reveal gcd(a, a)
     } else {
@@ -311,7 +311,7 @@ ghost
 requires 0 <= a && 0 <= b && a % 2 == 0 && b % 2 == 1
 ensures gcd(a, b) == gcd(a / 2, b)
 decreases a + b
-func gcd_even_odd_div2(a, b uint) {
+func gcd_even_odd_div2(a, b integer) {
     if a == 0 {
         // gcd(0, b) == gcd(0, b) trivially
     } else if a < b {
@@ -346,7 +346,7 @@ ghost
 requires 0 <= a && 0 <= b && b % 2 == 0 && a % 2 == 1
 ensures gcd(a, b) == gcd(a, b / 2)
 decreases
-func gcd_even_odd_div2_2(a, b uint) {
+func gcd_even_odd_div2_2(a, b integer) {
     gcdCommLemma(a, b)     // gcd(a, b) == gcd(b, a)
     gcd_even_odd_div2(b, a)     // gcd(b, a) == gcd(b / 2, a)
     gcdCommLemma(b / 2, a) // gcd(b / 2, a) == gcd(a, b / 2)
@@ -357,7 +357,7 @@ func gcd_even_odd_div2_2(a, b uint) {
 ghost
 opaque
 decreases
-pure func nonLinearSub(u, A, B, aVal, mVal uint) bool {
+pure func nonLinearSub(u, A, B, aVal, mVal integer) bool {
     return u == A * aVal - B * mVal
 }
 //// end lemmas for GCD ////
@@ -399,7 +399,7 @@ trusted
 requires 0 < b && b < a
 ensures a % b == (a - b) % b
 decreases
-func modSubLemma(a, b uint)
+func modSubLemma(a, b integer)
 
 // Product parity: (a * b) % 2 == (a % 2) * (b % 2).
 //
@@ -419,7 +419,7 @@ trusted
 requires 0 <= a && 0 <= b
 ensures (a * b) % 2 == (a % 2) * (b % 2)
 decreases
-func prodParityLemma(a, b uint)
+func prodParityLemma(a, b integer)
 
 // AC_ge_BD_ge: When A+C >= m, then B+D >= a. (Matches fiat-crypto's AC_ge_BD_ge.)
 // Proof: (B+D)*m = (A+C)*a - (u-v). Since A+C >= m: (A+C)*a >= m*a.
@@ -461,7 +461,7 @@ requires A + C >= m
 requires 0 < a && a < m && 0 < m
 ensures  B + D >= a
 decreases
-func AC_ge_BD_ge(u, v, A, B, C, D, a, m uint)
+func AC_ge_BD_ge(u, v, A, B, C, D, a, m integer)
 
 // AC_lt_BD_le: When A+C < m, then B+D <= a. (Matches fiat-crypto's AC_lt_BD_le.)
 // Proof: (B+D)*m = (A+C)*a - u + v. Since A+C <= m-1: (A+C)*a <= (m-1)*a.
@@ -502,7 +502,7 @@ requires A + C < m
 requires 0 < a && 0 < m
 ensures  B + D <= a
 decreases
-func AC_lt_BD_le(u, v, A, B, C, D, a, m uint)
+func AC_lt_BD_le(u, v, A, B, C, D, a, m integer)
 //// end trusted non-linear arithmetic lemmas with Lean formalization ////
 
 //// begin non-linear arithmetic lemmas ////
@@ -511,7 +511,7 @@ func AC_lt_BD_le(u, v, A, B, C, D, a, m uint)
 ghost
 ensures (a + b) * c == a * c + b * c
 decreases
-func distLemma(a, b, c uint) {
+func distLemma(a, b, c integer) {
 	// no body needed
 }
 
@@ -523,7 +523,7 @@ requires nonLinearSub(u, A, B, a, m)
 requires nonLinearSub(v, D, C, m, a)
 ensures u - v == (A + C) * a - (B + D) * m
 decreases
-func subExpandLemma(u, v, A, B, C, D, a, m uint) {
+func subExpandLemma(u, v, A, B, C, D, a, m integer) {
     reveal nonLinearSub(u, A, B, a, m)
     reveal nonLinearSub(v, D, C, m, a)
     distLemma(A, C, a)
@@ -556,7 +556,7 @@ requires B + D < a ==> Bp == B + D
 requires B + D >= a ==> Bp == B + D - a
 ensures (A + C) * a - (B + D) * m == Ap * a - Bp * m
 decreases
-func modAddLemma(A, B, C, D, Ap, Bp, a, m uint) {
+func modAddLemma(A, B, C, D, Ap, Bp, a, m integer) {
 	if A + C < m {
 		// Neither wraps: Ap = A+C, Bp = B+D. Trivial.
 	} else {
@@ -583,7 +583,7 @@ requires A % 2 != 0 || B % 2 != 0
 ensures (A + m) % 2 == 0
 ensures (B + a) % 2 == 0
 decreases
-func parityLemma(u, A, B, a, m uint) {
+func parityLemma(u, A, B, a, m integer) {
     reveal nonLinearSub(u, A, B, a, m)
     prodParityLemma(A, a)
     prodParityLemma(B, m)
@@ -597,7 +597,7 @@ requires 0 <= A && A * 2 < m // range for A
 requires 0 <= B && B * 2 <= a // range for B
 ensures nonLinearSub(u, A, B, a, m)
 decreases
-func halvRelLemmaU1(u, A, B, a, m uint) {
+func halvRelLemmaU1(u, A, B, a, m integer) {
 	uOld := u * 2
 	AOld := A * 2
 	BOld := B * 2
@@ -616,7 +616,7 @@ ensures nonLinearSub(u, A, B, a, m)
 ensures 0 <= A
 ensures 0 <= B && B < a
 decreases
-func halvRelLemmaU2(u, A, B, a, m uint) {
+func halvRelLemmaU2(u, A, B, a, m integer) {
 	uOld := u * 2
 	AOld := A * 2 - m
 	BOld := B * 2 - a
@@ -639,7 +639,7 @@ requires C % 2 != 0 || D % 2 != 0
 ensures (C + m) % 2 == 0
 ensures (D + a) % 2 == 0
 decreases
-func parityLemmaV(v, C, D, a, m uint) {
+func parityLemmaV(v, C, D, a, m integer) {
     reveal nonLinearSub(v, D, C, m, a)
     prodParityLemma(C, a)
     prodParityLemma(D, m)
@@ -653,7 +653,7 @@ requires 0 <= C && C * 2 < m // range for C
 requires 0 <= D && D * 2 <= a // range for D
 ensures nonLinearSub(v, D, C, m, a)
 decreases
-func halvRelLemmaV1(v, C, D, a, m uint) {
+func halvRelLemmaV1(v, C, D, a, m integer) {
 	vOld := v * 2
 	COld := C * 2
 	DOld := D * 2
@@ -674,7 +674,7 @@ ensures nonLinearSub(v, D, C, m, a)
 ensures 0 <= C
 ensures 0 <= D
 decreases
-func halvRelLemmaV2(v, C, D, a, m uint) {
+func halvRelLemmaV2(v, C, D, a, m integer) {
 	vOld := v * 2
 	COld := C * 2 - m
 	DOld := D * 2 - a
