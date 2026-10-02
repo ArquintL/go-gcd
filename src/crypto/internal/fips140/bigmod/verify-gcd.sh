@@ -8,7 +8,7 @@ BENCH_RUNS=${1:-}
 isCi=$CI
 
 gobraJar="/gobra/gobra.jar"
-additionalGobraArgs="--parallelizeBranches --input nat.go nat-spec.gobra sync_flag_fixed.go -I .verification"
+additionalGobraArgs="--parallelizeBranches --input nat.go nat-spec.gobra sync_flag.go -I .verification"
 
 
 JAVA_CMD="java -Xss128m -jar $gobraJar -I $scriptDir $additionalGobraArgs"

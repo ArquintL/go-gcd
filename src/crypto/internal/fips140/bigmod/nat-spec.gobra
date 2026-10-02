@@ -228,8 +228,9 @@ func (n *Nat) NonZeroAnnouncedLen(ghost p perm) {
 //// begin Modulus ////
 pred (m *Modulus) Inv() {
     acc(m) && m.nat.Inv() &&
-    (m.odd == (m.nat.Repr() % 2 == 1)) &&
-    (m.odd ==> m.rr.Inv())
+    (m.allFieldsInitialized ==>
+        (m.odd == (m.nat.Repr() % 2 == 1)) &&
+        (m.odd ==> m.rr.Inv()))
 }
 
 ghost
@@ -350,6 +351,30 @@ func gcd_even_odd_div2_2(a, b integer) {
     gcdCommLemma(a, b)     // gcd(a, b) == gcd(b, a)
     gcd_even_odd_div2(b, a)     // gcd(b, a) == gcd(b / 2, a)
     gcdCommLemma(b / 2, a) // gcd(b / 2, a) == gcd(a, b / 2)
+}
+
+ghost
+requires 0 < u && 0 <= v
+requires v % u == 0
+ensures  gcd(u, v) == u
+decreases
+func dividesGcd(u, v integer) {
+    gcdCommLemma(u, v)
+    reveal gcd(v, u)
+    gcdBaseLemma(u)
+}
+
+ghost
+requires 0 <= a && 0 < b
+ensures  gcd(a, b) <= b
+decreases b
+func gcdLeRight(a, b integer) {
+    reveal gcd(a, b)
+    if a % b == 0 {
+        gcdBaseLemma(b)
+    } else {
+        gcdLeRight(b, a % b)
+    }
 }
 //// end lemmas for GCD ////
 
@@ -530,6 +555,115 @@ func mulAdd(x, y, z integer) {
 	reveal nonLinearMul(x + y, z)
 	reveal nonLinearMul(x, z)
 	reveal nonLinearMul(y, z)
+}
+
+ghost
+ensures nonLinearMul(K, x * 2) == nonLinearMul(K * 2, x)
+decreases
+func sourceHalve(K, x integer) {
+    reveal nonLinearMul(K, x * 2)
+    reveal nonLinearMul(K * 2, x)
+}
+
+ghost
+ensures nonLinearSub(K, L, x + y, y) == nonLinearSub(K, L - K, x, y)
+decreases
+func sourceSub(K, L, x, y integer) {
+    reveal nonLinearMul(K, x + y)
+    reveal nonLinearMul(L, y)
+    reveal nonLinearMul(K, x)
+    reveal nonLinearMul(L - K, y)
+}
+
+// At the only possible one-sided legacy wrap, the coefficient equations
+// u=A*a-B*m and v=D*m-C*a, together with B+D=a and A+C<m, give
+// v = u + (m-A-C)*a.
+ghost
+requires u == nonLinearSub(A, B, a, m)
+requires v == nonLinearSub(D, C, m, a)
+requires 0 < a && 0 < u && 0 < v
+requires A + C < m && B + D == a
+ensures  u < v
+ensures  a < v
+ensures  v == u + (m - A - C) * a
+decreases
+func legacyBoundaryEquation(a, m, u, v, A, B, C, D integer) {
+    k := m - A - C
+    mulAdd(A, C, a)
+    mulAdd(B, D, m)
+    mulAdd(A + C, k, a)
+    mulComm(a, m)
+    reveal nonLinearMul(k, a)
+    mulIeqLemma(1, k, a)
+}
+
+// P and Q witness a = P*u-Q*v, with P>=0 and Q<=0. At a<v, a negative Q
+// would make the right-hand side at least v, so Q=0 and a=P*u.
+ghost
+requires 0 <= P && Q <= 0
+requires a == nonLinearSub(P, Q, u, v)
+requires 0 < a && 0 < u && a < v
+ensures  Q == 0
+ensures  a == P * u
+decreases
+func signedSourceAtBoundary(a, P, Q, u, v integer) {
+    reveal nonLinearMul(P, u)
+    reveal nonLinearMul(0, v)
+    assert Q == 0 by contra {
+        assert Q < 0
+        R := 0 - Q
+        assert 1 <= R
+        mulAdd(Q, R, v)
+        reveal nonLinearMul(R, v)
+        mulIeqLemma(1, R, v)
+        mulIeqLemma(0, P, u)
+        assert a == P * u + R * v
+    }
+}
+
+ghost
+requires 0 < u && 0 <= factor
+ensures  (factor * u) % u == 0
+decreases factor
+func multipleModLemma(factor, u integer) {
+    if factor > 1 {
+        mulIeqLemma(1, factor, u)
+        mulAdd(factor - 1, 1, u)
+        reveal nonLinearMul(factor, u)
+        reveal nonLinearMul(factor - 1, u)
+        reveal nonLinearMul(1, u)
+        modSubLemma(factor * u, u)
+        multipleModLemma(factor - 1, u)
+    } else if factor == 1 {
+        assert factor * u == u
+    } else {
+        assert factor == 0
+    }
+}
+
+// At the only possible one-sided legacy wrap, the coefficient equations give
+// v = u + (m-A-C)*a. The signed source witness a = P*u-Q*v then forces
+// Q=0 and a=P*u, so v is a non-negative multiple of u.
+ghost
+requires 0 <= P && Q <= 0
+requires a == nonLinearSub(P, Q, u, v)
+requires u == nonLinearSub(A, B, a, m)
+requires v == nonLinearSub(D, C, m, a)
+requires 0 < a && 0 < u && 0 < v
+requires A + C < m && B + D == a
+ensures  u < v
+ensures  v % u == 0
+decreases
+func legacyBoundaryDivides(a, m, u, v, A, B, C, D, P, Q integer) {
+    legacyBoundaryEquation(a, m, u, v, A, B, C, D)
+    signedSourceAtBoundary(a, P, Q, u, v)
+    k := m - A - C
+    factor := 1 + k * P
+    mulAdd(1, k * P, u)
+    reveal nonLinearMul(factor, u)
+    reveal nonLinearMul(1, u)
+    reveal nonLinearMul(k * P, u)
+    multipleModLemma(factor, u)
 }
 
 // Modular addition preserves linear combinations (when wrapping is synchronized).

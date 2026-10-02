@@ -647,6 +647,10 @@ type Modulus struct {
 	odd   bool
 	m0inv uint // -nat.limbs[0]⁻¹ mod _W
 	rr    *Nat // R*R for montgomeryRepresentation
+
+	// the following ghost field indicates whether `odd`, `m0inv`, and `rr`
+	// have been correctly initialized.
+	//@ ghost allFieldsInitialized bool
 }
 
 // rr returns R*R with R = 2^(_W * n) and n = len(m.nat.limbs).
@@ -952,12 +956,16 @@ func (x *Nat) SubOne(m *Modulus) *Nat {
 //@ requires noPerm < p && noPerm < q
 //@ requires x.Inv() && acc(y.Inv(), p) && acc(m.Inv(), q)
 //@ requires x.AnnouncedLen() == m.AnnouncedLen() && y.AnnouncedLen() == m.AnnouncedLen()
-//@ requires 0 <= x.Repr() && x.Repr() < m.Repr()
-//@ requires 0 <= y.Repr() && y.Repr() < m.Repr()
+//@ requires 0 <= x.Repr() && x.Repr() <= m.Repr()
+//@ requires 0 <= y.Repr() && y.Repr() <= m.Repr()
+//@ requires x.Repr() < m.Repr() || y.Repr() < m.Repr()
 //@ ensures  r == x
 //@ ensures  x.Inv() && acc(y.Inv(), p) && acc(m.Inv(), q)
+//@ ensures  x.AnnouncedLen() == old(x.AnnouncedLen())
 //@ ensures  0 <= x.Repr() && x.Repr() < m.Repr()
 //@ ensures  x.Repr() == (old(x.Repr()) + y.Repr()) % m.Repr()
+//@ ensures  old(x.Repr()) + y.Repr() < m.Repr() ==> x.Repr() == old(x.Repr()) + y.Repr()
+//@ ensures  old(x.Repr()) + y.Repr() >= m.Repr() ==> x.Repr() == old(x.Repr()) + y.Repr() - m.Repr()
 //@ decreases
 func (x *Nat) Add(y *Nat, m *Modulus /*@, ghost p, q perm @*/) (r *Nat) {
 	overflow := x.add(y /*@, p/2 @*/)
@@ -1386,6 +1394,9 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	// Note this algorithm does not handle either input being zero.
 
 	//@ ghost fullProof := a.Repr() < m.Repr()
+	// copy the global variable to ensure that the value remains fixed across
+	// the loop iterations:
+	useLegacyImpl := !UseSynchronizedWrappingInExtendedGCD
 
 	if a.IsZero(/*@ p / 2 @*/) == yes || m.IsZero(/*@ p / 2 @*/) == yes {
 		return nil, nil, errors.New("extendedGCD: a or m is zero") /*@, 0 @*/
@@ -1410,6 +1421,18 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	D := NewNat().reset(natLen(a /*@, p / 2 @*/))
 	D.setOne()
 
+	// P and Q witness that the original a is a combination of the current
+	// binary-GCD state. The legacy proof needs this fact to rule out
+	// spurious states admitted by the coefficient equations.
+	/*@
+	ghost P := integer(1)
+	ghost Q := integer(0)
+	assert a.Repr() == nonLinearSub(P, Q, u.Repr(), v.Repr()) by contra {
+		reveal nonLinearMul(P, u.Repr())
+		reveal nonLinearMul(Q, v.Repr())
+	}
+	@*/
+
 	// Establish relational invariants (conditional on fullProof):
 	// u = a = 1*a - 0*m and v = m = 1*m - 0*a.
 	/*@
@@ -1421,6 +1444,11 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 		assert reveal nonLinearMul(D.Repr(), m.Repr()) == D.Repr() * m.Repr()
 		assert reveal nonLinearMul(C.Repr(), a.Repr()) == C.Repr() * a.Repr()
 	}
+	// while the relation for `u` remains true (if `fullProof`), the legacy
+	// implementation loses the relation for `v`. Thus, we introduce the
+	// following ghost variable to keep track of the fact whether the
+	// relation for `v` still holds:
+	ghost vRelationHolds := fullProof
 	@*/
 
 	// Before and after each loop iteration, the following hold:
@@ -1450,44 +1478,126 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 	//@ invariant 0 < m.Repr()
 	//@ invariant 0 < u.Repr() && u.Repr() <= a.Repr() // range for u
 	//@ invariant 0 <= v.Repr() && v.Repr() <= m.Repr() // range for v
+	//@ invariant useLegacyImpl || fullProof ==> 0 <= A.Repr() && A.Repr() <= m.Repr() // range for A
+	//@ invariant useLegacyImpl || fullProof ==> 0 <= B.Repr() && B.Repr() < a.Repr()  // range for B; stronger than fiat-crypto's B ≤ a
+	//@ invariant useLegacyImpl || fullProof ==> 0 <= C.Repr() && C.Repr() < m.Repr()  // range for C
+	//@ invariant useLegacyImpl || fullProof ==> 0 <= D.Repr() && D.Repr() <= a.Repr() // range for D
 	// Unconditional invariants — parity:
 	//@ invariant a.Repr() % 2 == 1 || m.Repr() % 2 == 1
 	//@ invariant u.Repr() % 2 == 1 || v.Repr() % 2 == 1
 	// Unconditional invariant — GCD preservation:
 	//@ invariant gcd(u.Repr(), v.Repr()) == gcd(a.Repr(), m.Repr())
+	// Unconditional invariant — a is a non-negative combination of u and v:
+	//@ invariant 0 <= P && Q <= 0
+	//@ invariant a.Repr() == nonLinearSub(P, Q, u.Repr(), v.Repr())
 	// Conditional invariants — coefficient proof (only when fullProof):
 	//@ invariant fullProof ==> a.Repr() < m.Repr()
 	//@ invariant fullProof ==> 0 <= A.Repr() && A.Repr() < m.Repr() // range for A
-	//@ invariant fullProof ==> 0 <= B.Repr() && B.Repr() < a.Repr() // range for B; stronger than fiat-crypto's B ≤ a
-	//@ invariant fullProof ==> 0 <= C.Repr() && C.Repr() < m.Repr() // range for C
-	//@ invariant fullProof ==> 0 <= D.Repr() && D.Repr() <= a.Repr() // range for D
 	// Conditional invariants — relational (abstract to avoid NIA):
 	//@ invariant fullProof ==> u.Repr() == nonLinearSub(A.Repr(), B.Repr(), a.Repr(), m.Repr())
-	//@ invariant fullProof ==> v.Repr() == nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr())
+	//@ invariant fullProof && !useLegacyImpl ==> vRelationHolds
+	//@ invariant vRelationHolds ==> fullProof
+	//@ invariant vRelationHolds ==> v.Repr() == nonLinearSub(D.Repr(), C.Repr(), m.Repr(), a.Repr())
+	// Legacy terminal phase: if `vRelationHolds` is false, the `v` relation is lost. This is however fine as
+	// `u` will remain unchanged due to two reasons:
+	// (1) In the first part of the loop body `u` remains unmodified because the invariants
+	//     imply u == gcd(u, v) == gcd(a, m) and for v>0, this implies u<=v.
+	//     Thus, the path where u and v are both odd and v<u is impossible.
+	// (2) In the second part of the loop body, `u` remains unmodified because u is odd.
+	//@ invariant fullProof && !vRelationHolds ==> u.Repr() == gcd(a.Repr(), m.Repr()) && u.Repr() % 2 == 1
 	//@ decreases u.Repr() + v.Repr()
 	for {
 		// If both u and v are odd, subtract the smaller from the larger.
 		// If u = v, we need to subtract from v to hit the modified exit condition.
 		if u.IsOdd(/*@ p / 2 @*/) == yes && v.IsOdd(/*@ p / 2 @*/) == yes {
 			if v.cmpGeq(u /*@, p / 4 @*/) == no {
+				/*@
+				assert fullProof ==> vRelationHolds by contra {
+					gcdLeRight(u.Repr(), v.Repr())
+				}
+				@*/
 				//@ preU := u.Repr()
 				u.sub(v /*@, p / 2 @*/)
 				//@ gcd_sub_diag_l(preU, v.Repr())
-				if UseSynchronizedWrappingInExtendedGCD {
-					syncAdd(A, C, B, D, m, a /*@, preU, v.Repr(), A.Repr(), B.Repr(), C.Repr(), D.Repr(), fullProof, p / 4 @*/)
+				//@ sourceSub(P, Q, u.Repr(), v.Repr())
+				//@ preQ := Q
+				//@ Q = Q - P
+				if useLegacyImpl {
+					/*@
+					ghost if fullProof {
+						ghost if A.Repr() + C.Repr() >= m.Repr() {
+							assert B.Repr() + D.Repr() >= a.Repr() by contra {
+								AC_ge_BD_ge(preU, v.Repr(), A.Repr(), B.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+							}
+						} else {
+							assert B.Repr() + D.Repr() < a.Repr() by contra {
+								AC_lt_BD_le(preU, v.Repr(), A.Repr(), B.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+								legacyBoundaryDivides(a.Repr(), m.Repr(), preU, v.Repr(), A.Repr(), B.Repr(), C.Repr(), D.Repr(), P, preQ)
+							}
+						}
+					}
+					@*/
+					//@ preA := A.Repr()
+					//@ preB := B.Repr()
+					modM := &Modulus{nat: m}
+					//@ fold acc(modM.Inv(), p/4)
+					A.Add(C, modM /*@, p/4, p/8 @*/)
+					//@ unfold acc(modM.Inv(), p/4)
+					modA := &Modulus{nat: a}
+					//@ fold acc(modA.Inv(), p/4)
+					B.Add(D, modA /*@, p/4, p/8 @*/)
+					//@ unfold acc(modA.Inv(), p/4)
+					/*@
+					ghost if fullProof {
+						modAddLemma(preA, preB, C.Repr(), D.Repr(), A.Repr(), B.Repr(), a.Repr(), m.Repr())
+					}
+					@*/
 				} else {
-					A.Add(C, &Modulus{nat: m} /*@, p/4, p/4 @*/)
-					B.Add(D, &Modulus{nat: a} /*@, p/4, p/4 @*/)
+					syncAdd(A, C, B, D, m, a /*@, preU, v.Repr(), A.Repr(), B.Repr(), C.Repr(), D.Repr(), fullProof, p / 4 @*/)
 				}
 			} else {
 				//@ preV := v.Repr()
+				/*@
+				ghost if useLegacyImpl && vRelationHolds {
+					ghost if A.Repr() + C.Repr() >= m.Repr() {
+						assert B.Repr() + D.Repr() >= a.Repr() by contra {
+							AC_ge_BD_ge(u.Repr(), preV, A.Repr(), B.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+						}
+					} else {
+						assert B.Repr() + D.Repr() <= a.Repr() by contra {
+							AC_lt_BD_le(u.Repr(), preV, A.Repr(), B.Repr(), C.Repr(), D.Repr(), a.Repr(), m.Repr())
+						}
+						ghost if B.Repr() + D.Repr() == a.Repr() {
+							// this path will lead to unsynchronized subtraction
+							legacyBoundaryDivides(a.Repr(), m.Repr(), u.Repr(), preV, A.Repr(), B.Repr(), C.Repr(), D.Repr(), P, Q)
+							dividesGcd(u.Repr(), preV)
+							vRelationHolds = false
+						}
+					}
+				}
+				@*/
 				v.sub(u /*@, p / 2 @*/)
 				//@ gcd_sub_diag_l2(u.Repr(), preV)
-				if UseSynchronizedWrappingInExtendedGCD {
-					syncAdd(C, A, D, B, m, a /*@, u.Repr(), preV, A.Repr(), B.Repr(), C.Repr(), D.Repr(), fullProof, p / 4 @*/)
+				//@ sourceSub(Q, P, v.Repr(), u.Repr())
+				//@ P = P - Q
+				if useLegacyImpl {
+					//@ preC := C.Repr()
+					//@ preD := D.Repr()
+					modM := &Modulus{nat: m}
+					//@ fold acc(modM.Inv(), p/4)
+					C.Add(A, modM /*@, p/4, p/8 @*/)
+					//@ unfold acc(modM.Inv(), p/4)
+					modA := &Modulus{nat: a}
+					//@ fold acc(modA.Inv(), p/4)
+					D.Add(B, modA /*@, p/4, p/8 @*/)
+					//@ unfold acc(modA.Inv(), p/4)
+					/*@
+					ghost if vRelationHolds {
+						modAddLemma(A.Repr(), B.Repr(), preC, preD, C.Repr(), D.Repr(), a.Repr(), m.Repr())
+					}
+					@*/
 				} else {
-					C.Add(A, &Modulus{nat: m} /*@, p/4, p/4 @*/)
-					D.Add(B, &Modulus{nat: a} /*@, p/4, p/4 @*/)
+					syncAdd(C, A, D, B, m, a /*@, u.Repr(), preV, A.Repr(), B.Repr(), C.Repr(), D.Repr(), fullProof, p / 4 @*/)
 				}
 			}
 		}
@@ -1502,6 +1612,8 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 			//@ preU := u.Repr()
 			rshift1(u, 0)
 			//@ gcd_even_odd_div2(preU, v.Repr())
+			//@ sourceHalve(P, u.Repr())
+			//@ P = P * 2
 			if A.IsOdd(/*@ p / 2 @*/) == yes || B.IsOdd(/*@ p / 2 @*/) == yes {
 				/*@ 
 				ghost if fullProof {
@@ -1529,16 +1641,18 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 			//@ preV := v.Repr()
 			rshift1(v, 0)
 			//@ gcd_even_odd_div2_2(u.Repr(), preV)
+			//@ sourceHalve(Q, v.Repr())
+			//@ Q = Q * 2
 			if C.IsOdd(/*@ p / 2 @*/) == yes || D.IsOdd(/*@ p / 2 @*/) == yes {
 				/*@
-				ghost if fullProof {
+				ghost if vRelationHolds {
 					parityLemma(preV, D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
 				rshift1(C, C.add(m /*@, p / 4 @*/))
 				rshift1(D, D.add(a /*@, p / 4 @*/))
 				/*@
-				ghost if fullProof {
+				ghost if vRelationHolds {
 					halveRelAdjusted(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
@@ -1546,7 +1660,7 @@ func extendedGCD(a, m *Nat /*@, ghost p perm @*/) (u, A *Nat, err error /*@, gho
 				rshift1(C, 0)
 				rshift1(D, 0)
 				/*@
-				ghost if fullProof {
+				ghost if vRelationHolds {
 					halveRel(v.Repr(), D.Repr(), C.Repr(), m.Repr(), a.Repr())
 				}
 				@*/
